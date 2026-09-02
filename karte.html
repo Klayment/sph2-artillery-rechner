@@ -91,7 +91,7 @@
   #mapViewport.dragging { cursor: grabbing; }
   #mapCanvas { position: absolute; top: 0; left: 0; will-change: transform; }
   #mapCanvas.animated { transition: transform .18s cubic-bezier(.2,.7,.3,1); }
-  #mapCanvas img { position: absolute; width: 256px; height: 256px; display: block; }
+  #mapCanvas img { position: absolute; width: 256px; height: 256px; display: block; -webkit-user-drag: none; user-drag: none; }
   #overlaySvg { position: absolute; top: 0; left: 0; pointer-events: none; }
   #overlaySvg.animated { transition: transform .18s cubic-bezier(.2,.7,.3,1); }
 
@@ -740,6 +740,7 @@ function renderTiles() {
       wanted.add(key);
       if (tileImgCache.has(key)) continue;
       const img = document.createElement('img');
+      img.draggable = false;
       img.style.left = (tx * TILE_SIZE) + 'px';
       img.style.top = (ty * TILE_SIZE) + 'px';
       img.src = `${REPO_BASE}${mapConfig.tiles.path}/zoom_${zoom}/${tx}_${ty}.${mapConfig.tiles.extension}`;
@@ -941,6 +942,8 @@ async function updateResults() {
 
 /* ---------- pointer-based pan / zoom ---------- */
 let dragging = false, dragPointerId = null, dragStart = null, dragged = false;
+
+viewport.addEventListener('dragstart', e => e.preventDefault());
 
 viewport.addEventListener('pointerdown', e => {
   if (e.button !== undefined && e.button !== 0) return;

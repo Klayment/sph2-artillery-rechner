@@ -38,7 +38,7 @@
     justify-content: center;
     padding: 24px 16px;
   }
-  .wrap { width: 100%; max-width: 1040px; }
+  .wrap { width: 100%; max-width: min(1600px, 94vw); }
   header { text-align: center; margin-bottom: 16px; }
   header h1 { margin: 0; font-size: 1.5rem; letter-spacing: 0.02em; color: var(--text); font-weight: 600; }
   header p { margin: 6px 0 0; color: var(--text-dim); font-size: 0.85rem; }
@@ -79,7 +79,7 @@
     position: relative;
     width: 100%;
     aspect-ratio: 4 / 3;
-    max-height: 600px;
+    max-height: min(1000px, 78vh);
     overflow: hidden;
     background: #0a0c11;
     border: 1px solid var(--line);
@@ -592,7 +592,18 @@ const MAPS = [
   { id: 'ozeti', label: 'Ozeti' }
 ];
 
-let currentMapId = MAPS[0].id;
+const MAP_STORAGE_KEY = 'sph2-artillery-rechner:lastMap';
+
+function loadStoredMapId() {
+  try {
+    const stored = localStorage.getItem(MAP_STORAGE_KEY);
+    return MAPS.some(m => m.id === stored) ? stored : MAPS[0].id;
+  } catch (e) {
+    return MAPS[0].id;
+  }
+}
+
+let currentMapId = loadStoredMapId();
 let mapConfig = null;
 let terrainManifest = null;
 const chunkCache = new Map();
@@ -1054,6 +1065,7 @@ mapSelect.addEventListener('change', () => switchMap(mapSelect.value));
 
 async function switchMap(mapId) {
   currentMapId = mapId;
+  try { localStorage.setItem(MAP_STORAGE_KEY, mapId); } catch (e) { /* ignore */ }
   markers.gun = null; markers.target = null;
   loadingEl.hidden = false;
   try {

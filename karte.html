@@ -91,7 +91,8 @@
   #mapViewport.dragging { cursor: grabbing; }
   #mapCanvas { position: absolute; top: 0; left: 0; will-change: transform; }
   #mapCanvas.animated { transition: transform .18s cubic-bezier(.2,.7,.3,1); }
-  #mapCanvas img { position: absolute; width: 256px; height: 256px; display: block; -webkit-user-drag: none; user-drag: none; }
+  #mapCanvas img { position: absolute; width: 256px; height: 256px; display: block; -webkit-user-drag: none; user-drag: none; filter: url(#terrainTint); }
+  #mapViewport.tint-off #mapCanvas img { filter: none; }
   #overlaySvg { position: absolute; top: 0; left: 0; pointer-events: none; }
   #overlaySvg.animated { transition: transform .18s cubic-bezier(.2,.7,.3,1); }
 
@@ -162,6 +163,24 @@
 </style>
 </head>
 <body>
+<svg width="0" height="0" style="position:absolute">
+  <defs>
+    <!--
+      Tone-mapped color filter for the (naturally grayscale) satellite tiles.
+      Maps dark→light luminance to green (vegetation) -> tan/olive (open
+      ground) -> gray/white (roads, buildings), like a classic topo map,
+      so terrain features stay distinguishable without any actual color
+      data in the source imagery.
+    -->
+    <filter id="terrainTint" color-interpolation-filters="sRGB">
+      <feComponentTransfer>
+        <feFuncR type="table" tableValues="0.086 0.141 0.290 0.541 0.659 0.722 0.894"/>
+        <feFuncG type="table" tableValues="0.141 0.224 0.353 0.482 0.604 0.702 0.871"/>
+        <feFuncB type="table" tableValues="0.102 0.122 0.208 0.306 0.447 0.627 0.816"/>
+      </feComponentTransfer>
+    </filter>
+  </defs>
+</svg>
 <div class="wrap">
   <header>
     <h1>SPH-2 Karten-Rechner</h1>
@@ -181,6 +200,7 @@
           <button id="modeTarget" class="target-mode">🎯 Ziel</button>
           <button id="clearBtn" class="ghost icon" title="Marker zurücksetzen">↺</button>
           <div class="spacer"></div>
+          <button id="tintBtn" class="icon active" title="Geländefärbung umschalten">🎨</button>
           <div class="zoom-controls">
             <button id="recenterBtn" class="icon" title="Ansicht zentrieren">⤢</button>
             <button id="zoomOut" class="icon">−</button>
@@ -1037,6 +1057,23 @@ viewport.addEventListener('wheel', e => {
 }, { passive: false });
 
 document.getElementById('recenterBtn').addEventListener('click', () => withAnimation(centerView));
+
+const TINT_STORAGE_KEY = 'sph2-artillery-rechner:mapTint';
+const tintBtn = document.getElementById('tintBtn');
+
+function setTint(enabled) {
+  viewport.classList.toggle('tint-off', !enabled);
+  tintBtn.classList.toggle('active', enabled);
+  try { localStorage.setItem(TINT_STORAGE_KEY, enabled ? '1' : '0'); } catch (e) { /* ignore */ }
+}
+
+tintBtn.addEventListener('click', () => setTint(viewport.classList.contains('tint-off')));
+
+(function initTint() {
+  let stored = null;
+  try { stored = localStorage.getItem(TINT_STORAGE_KEY); } catch (e) { /* ignore */ }
+  setTint(stored !== '0');
+})();
 
 function centerView() {
   const center = {

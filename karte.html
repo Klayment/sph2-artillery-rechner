@@ -1,0 +1,1089 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SPH-2 Karten-Rechner — Wardogs</title>
+<style>
+  :root {
+    --bg: #10131a;
+    --bg-soft: #151a23;
+    --panel: #1a2029;
+    --panel-2: #212836;
+    --line: #2c3442;
+    --line-soft: #232a37;
+    --text: #e7ebf2;
+    --text-dim: #8993a8;
+    --text-faint: #626c80;
+
+    --accent: #5fc7d6;      /* SPH-2 / low arc / primary */
+    --accent-soft: #2f4a52;
+    --target: #f2a25c;      /* target marker / high arc */
+    --good: #6fcf97;        /* corrected / safe */
+    --good-soft: #23392d;
+    --warn: #e8b94d;
+    --warn-soft: #3a331f;
+    --bad: #e0736b;
+    --bad-soft: #3a2325;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background:
+      radial-gradient(1200px 600px at 50% -10%, #1a2130 0%, var(--bg) 55%);
+    color: var(--text);
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    display: flex;
+    justify-content: center;
+    padding: 24px 16px;
+  }
+  .wrap { width: 100%; max-width: 1040px; }
+  header { text-align: center; margin-bottom: 16px; }
+  header h1 { margin: 0; font-size: 1.5rem; letter-spacing: 0.02em; color: var(--text); font-weight: 600; }
+  header p { margin: 6px 0 0; color: var(--text-dim); font-size: 0.85rem; }
+
+  nav.pages { text-align: center; margin-bottom: 16px; font-size: 0.8rem; }
+  nav.pages a {
+    color: var(--text-dim); text-decoration: none; padding: 6px 14px;
+    border: 1px solid var(--line); border-radius: 20px; margin: 0 4px;
+    display: inline-block; transition: border-color .15s, color .15s;
+  }
+  nav.pages a:hover { color: var(--text); border-color: var(--text-faint); }
+  nav.pages a.active { color: var(--bg); background: var(--accent); border-color: var(--accent); font-weight: 600; }
+
+  .layout { display: grid; grid-template-columns: 1fr 300px; gap: 16px; }
+  @media (max-width: 820px) { .layout { grid-template-columns: 1fr; } }
+
+  .panel {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+    padding: 16px; margin-bottom: 16px;
+  }
+
+  .toolbar { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; align-items: center; }
+  select, button {
+    background: var(--panel-2); color: var(--text); border: 1px solid var(--line);
+    border-radius: 8px; padding: 8px 13px; font-family: inherit; font-size: 0.82rem;
+    cursor: pointer; transition: border-color .15s, background .15s, color .15s;
+  }
+  select { padding: 8px 10px; }
+  button:hover { border-color: var(--text-faint); }
+  button.active { background: var(--accent); color: #0d1520; border-color: var(--accent); font-weight: 600; }
+  button.active.target-mode { background: var(--target); border-color: var(--target); }
+  button.ghost { background: transparent; }
+  button.icon { padding: 8px 12px; font-size: 0.95rem; line-height: 1; }
+  .spacer { flex: 1; }
+  .zoom-controls { display: flex; gap: 4px; }
+
+  #mapViewport {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 4 / 3;
+    max-height: 600px;
+    overflow: hidden;
+    background: #0a0c11;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    cursor: grab;
+    touch-action: none;
+    user-select: none;
+  }
+  #mapViewport.dragging { cursor: grabbing; }
+  #mapCanvas { position: absolute; top: 0; left: 0; will-change: transform; }
+  #mapCanvas.animated { transition: transform .18s cubic-bezier(.2,.7,.3,1); }
+  #mapCanvas img { position: absolute; width: 256px; height: 256px; display: block; }
+  #overlaySvg { position: absolute; top: 0; left: 0; pointer-events: none; }
+  #overlaySvg.animated { transition: transform .18s cubic-bezier(.2,.7,.3,1); }
+
+  #mapLoading {
+    position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+    color: var(--text-dim); font-size: 0.85rem; background: rgba(10,12,17,0.6); pointer-events: none;
+  }
+  #mapLoading[hidden] { display: none; }
+
+  .hint { font-size: 0.74rem; color: var(--text-faint); margin-top: 10px; line-height: 1.5; }
+
+  .side .card {
+    background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px;
+    padding: 14px 16px; margin-bottom: 12px;
+  }
+  .side .label {
+    font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.06em;
+    color: var(--text-faint); margin-bottom: 6px;
+  }
+  .side .value { font-size: 1.4rem; color: var(--text); font-weight: 600; }
+
+  .arc-block { padding: 10px 0; border-bottom: 1px solid var(--line-soft); }
+  .arc-block:last-child { border-bottom: none; }
+  .arc-head { display: flex; justify-content: space-between; align-items: baseline; }
+  .arc-head .name { font-size: 0.78rem; color: var(--text-dim); font-weight: 600; }
+  .arc-head .mil { font-size: 1.25rem; color: var(--text); font-weight: 700; }
+  .arc-sub { font-size: 0.7rem; color: var(--text-faint); margin-top: 3px; }
+
+  .pill {
+    display: inline-block; font-size: 0.62rem; font-weight: 700; padding: 2px 8px;
+    border-radius: 20px; margin-left: 7px; text-transform: uppercase; letter-spacing: 0.03em;
+  }
+  .pill.good { background: var(--good-soft); color: var(--good); }
+  .pill.warn { background: var(--warn-soft); color: var(--warn); }
+  .pill.bad { background: var(--bad-soft); color: var(--bad); }
+  .pill.muted { background: var(--line-soft); color: var(--text-faint); }
+
+  .status-line { font-size: 0.78rem; padding: 9px 11px; border-radius: 8px; margin-top: 4px; }
+  .status-line.warn { background: var(--bad-soft); border: 1px solid var(--bad); color: #f0b0ab; }
+  .status-line.muted { color: var(--text-dim); }
+
+  .correction-toggle {
+    display: flex; align-items: center; justify-content: space-between;
+    font-size: 0.76rem; color: var(--text-dim); margin-top: 2px;
+  }
+  .switch {
+    position: relative; width: 38px; height: 21px; flex: 0 0 auto; cursor: pointer;
+  }
+  .switch input { opacity: 0; width: 0; height: 0; }
+  .switch .track {
+    position: absolute; inset: 0; background: var(--line); border-radius: 20px; transition: background .15s;
+  }
+  .switch .knob {
+    position: absolute; top: 2px; left: 2px; width: 17px; height: 17px; background: var(--text-dim);
+    border-radius: 50%; transition: transform .15s, background .15s;
+  }
+  .switch input:checked + .track { background: var(--accent-soft); }
+  .switch input:checked + .track .knob { background: var(--accent); transform: translateX(17px); }
+
+  .terrain-note {
+    font-size: 0.68rem; color: var(--text-faint); line-height: 1.55; margin-top: 10px;
+    padding-top: 10px; border-top: 1px dashed var(--line);
+  }
+  .terrain-note b { color: var(--warn); }
+
+  footer { text-align: center; color: var(--text-faint); font-size: 0.68rem; margin-top: 18px; line-height: 1.6; }
+  footer a { color: var(--accent); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>SPH-2 Karten-Rechner</h1>
+    <p>Wardogs — Marker setzen, Distanz &amp; geländekorrigierte Elevation automatisch ablesen</p>
+  </header>
+  <nav class="pages">
+    <a href="index.html">Manuelle Entfernung</a>
+    <a href="karte.html" class="active">Karten-Modus</a>
+  </nav>
+
+  <div class="layout">
+    <div>
+      <div class="panel">
+        <div class="toolbar">
+          <select id="mapSelect"></select>
+          <button id="modeGun" class="active">📍 SPH-2</button>
+          <button id="modeTarget" class="target-mode">🎯 Ziel</button>
+          <button id="clearBtn" class="ghost icon" title="Marker zurücksetzen">↺</button>
+          <div class="spacer"></div>
+          <div class="zoom-controls">
+            <button id="recenterBtn" class="icon" title="Ansicht zentrieren">⤢</button>
+            <button id="zoomOut" class="icon">−</button>
+            <button id="zoomIn" class="icon">+</button>
+          </div>
+        </div>
+        <div id="mapViewport">
+          <div id="mapCanvas"></div>
+          <svg id="overlaySvg"></svg>
+          <div id="mapLoading">Karte wird geladen…</div>
+        </div>
+        <div class="hint">Ziehen zum Verschieben, Mausrad/Pinch zum Zoomen, Doppelklick zoomt auf den Punkt. Klick setzt den aktiven Marker.</div>
+      </div>
+    </div>
+
+    <div class="side">
+      <div class="card">
+        <div class="label">Distanz</div>
+        <div class="value" id="distValue">—</div>
+      </div>
+
+      <div class="card">
+        <div class="arc-block">
+          <div class="arc-head">
+            <span class="name">Low Arc</span>
+            <span class="mil" id="lowMil">—</span>
+          </div>
+          <div class="arc-sub" id="lowSub"></div>
+        </div>
+        <div class="arc-block">
+          <div class="arc-head">
+            <span class="name">High Arc</span>
+            <span class="mil" id="highMil">—</span>
+          </div>
+          <div class="arc-sub" id="highSub"></div>
+        </div>
+        <div id="rangeStatus" class="status-line muted">SPH-2- und Ziel-Marker setzen.</div>
+      </div>
+
+      <div class="card">
+        <div class="label">Höhenunterschied (ΔZ)</div>
+        <div class="value" id="deltaZValue">—</div>
+        <div class="correction-toggle">
+          <span>Geländekorrektur in MIL einrechnen</span>
+          <label class="switch">
+            <input type="checkbox" id="correctionToggle" checked>
+            <span class="track"><span class="knob"></span></span>
+          </label>
+        </div>
+        <div class="terrain-note">
+          ΔZ kommt aus den echten Höhendaten der Karte. Die MIL-Korrektur nutzt die von der Community
+          gemessenen Korrekturkurven für die SPH-2 (155MM HE). Diese Kurven deckt nicht jede Distanz/ΔZ-
+          Kombination ab — <b>außerhalb ihres Bereichs wird automatisch der Tabellenwert ohne Korrektur
+          angezeigt</b>, klar gekennzeichnet.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    Kartenkacheln, Höhendaten &amp; Geländekorrekturkurven live geladen von
+    <a href="https://github.com/apollyon-sys/wardogs-calculator" target="_blank" rel="noopener">apollyon-sys/wardogs-calculator</a> (MIT) —
+    community-gemessen, keine offiziellen Bulkhead-Daten. Internetverbindung beim ersten Laden erforderlich.
+  </footer>
+</div>
+
+<script>
+'use strict';
+
+/*
+ * Terrain-based elevation (MIL) correction for the SPH-2.
+ *
+ * Faithful, DOM-free port of the resolver logic in
+ * js/features/experimental-terrain-correction.js from
+ * https://github.com/apollyon-sys/wardogs-calculator (MIT license).
+ * The math and structure are unchanged; only the app-integration
+ * (state object, UI, i18n) was stripped out.
+ *
+ * That project ships this behind an opt-in toggle, off by default,
+ * because the correction "candidate" data itself is labeled
+ * DISABLED_RELEASE_CANDIDATE / HELD_OUT_REQUIRED by its own authors -
+ * i.e. even they don't fully trust it yet. It's applied automatically
+ * here because the user asked for it, but every result carries a
+ * status so the UI can show plainly when a shot falls outside the
+ * verified domain and silently falls back to the flat firing table.
+ */
+const TerrainCorrection = (() => {
+  const PAYLOAD_URLS = {
+    lowMain: 'data/ballistics/terrain-correction/low-main.json',
+    lowExtension: 'data/ballistics/terrain-correction/low-tail-apex.json',
+    highV2: 'data/ballistics/terrain-correction/high-v2.json'
+  };
+
+  function finite(v) { return Number.isFinite(Number(v)); }
+
+  async function fetchPayload(repoBase, relativeUrl, label) {
+    const res = await fetch(repoBase + relativeUrl, { cache: 'force-cache' });
+    if (!res.ok) throw new Error(`${res.status} loading ${label}`);
+    return res.json();
+  }
+
+  function validateLowMain(payload) {
+    const r = payload?.representation;
+    return Boolean(
+      payload?.schema === 'wardogs-current-155he-low-command-surface-candidate-v2' &&
+      Array.isArray(r?.distanceNodes) && r.distanceNodes.length === 345 &&
+      Array.isArray(r?.boundariesMrad) && r.boundariesMrad.length === 45 &&
+      finite(r?.guardMeters)
+    );
+  }
+
+  function validateLowExtension(payload) {
+    const reach = payload?.reachability;
+    return Boolean(
+      payload?.schema === 'wardogs-current-155he-low-tail-apex-candidate-v1' &&
+      reach && finite(reach.guardMeters) &&
+      Array.isArray(reach.distanceNodes) &&
+      Array.isArray(reach.maxPositiveDeltaZMeters) &&
+      reach.distanceNodes.length === reach.maxPositiveDeltaZMeters.length
+    );
+  }
+
+  function validateHigh(payload) {
+    const r = payload?.representation;
+    return Boolean(
+      payload?.schema === 'wardogs-current-155he-high-v2-command-surface-candidate-v1' &&
+      r?.orientation === 'decreasing-command-vs-positive-deltaZ' &&
+      finite(r?.guardMeters) && finite(r?.clipMeters) &&
+      Array.isArray(r?.boundaries) && r.boundaries.length === 80
+    );
+  }
+
+  /* ---------- shared interval / interpolation helpers ---------- */
+
+  function bisectInterval(nodes, value) {
+    if (!Array.isArray(nodes) || nodes.length < 2) return -1;
+    if (value < Number(nodes[0]) || value > Number(nodes[nodes.length - 1])) return -1;
+    if (value === Number(nodes[nodes.length - 1])) return nodes.length - 2;
+
+    let lo = 0, hi = nodes.length - 1;
+    while (lo + 1 < hi) {
+      const mid = (lo + hi) >> 1;
+      if (Number(nodes[mid]) <= value) lo = mid; else hi = mid;
+    }
+    return lo;
+  }
+
+  function interpolateSeries(nodes, values, x) {
+    const i = bisectInterval(nodes, x);
+    if (i < 0 || !Array.isArray(values) || values.length !== nodes.length) return null;
+    const x0 = Number(nodes[i]), x1 = Number(nodes[i + 1]);
+    const t = x1 === x0 ? 0 : (x - x0) / (x1 - x0);
+    return Number(values[i]) + (Number(values[i + 1]) - Number(values[i])) * t;
+  }
+
+  function interpolateSparseSegment(segment, distance) {
+    const nodes = segment?.distanceNodes, mins = segment?.minDeltaZMeters, maxs = segment?.maxDeltaZMeters;
+    const i = bisectInterval(nodes, distance);
+    if (i < 0) return null;
+    const d0 = Number(nodes[i]), d1 = Number(nodes[i + 1]);
+    const t = d1 === d0 ? 0 : (distance - d0) / (d1 - d0);
+    return {
+      minDeltaZM: Number(mins[i]) + (Number(mins[i + 1]) - Number(mins[i])) * t,
+      maxDeltaZM: Number(maxs[i]) + (Number(maxs[i + 1]) - Number(maxs[i])) * t
+    };
+  }
+
+  /* ---------- LOW ARC, main band (1283-2439 m) ---------- */
+
+  function lowMainEnvelope(payload, boundaryIndex, distance) {
+    const r = payload.representation;
+    const nodes = r.distanceNodes;
+    const mins = r.minDeltaZMetersByBoundary[boundaryIndex];
+    const maxs = r.maxDeltaZMetersByBoundary[boundaryIndex];
+    const i = bisectInterval(nodes, distance);
+    if (i < 0) return null;
+    const d0 = Number(nodes[i]), d1 = Number(nodes[i + 1]);
+    const t = d1 === d0 ? 0 : (distance - d0) / (d1 - d0);
+    return {
+      minDeltaZM: Number(mins[i]) + (Number(mins[i + 1]) - Number(mins[i])) * t,
+      maxDeltaZM: Number(maxs[i]) + (Number(maxs[i + 1]) - Number(maxs[i])) * t
+    };
+  }
+
+  function resolveLowMain(payload, distanceM, flatMil, deltaZM) {
+    const distance = Number(distanceM), flat = Number(flatMil), dz = Number(deltaZM);
+    if (![distance, flat, dz].every(Number.isFinite)) return { status: 'fallback', reason: 'non-finite-input' };
+
+    const domain = payload?.domain, selectable = payload?.selectableCommandMrad, r = payload?.representation;
+    if (!domain || !r || !Array.isArray(selectable) || selectable.length !== 2) {
+      return { status: 'fallback', reason: 'invalid-payload' };
+    }
+    if (distance < domain.distanceMinMeters || distance > domain.distanceMaxMeters ||
+        flat < domain.flatMilMin || flat > domain.flatMilMax ||
+        dz < domain.deltaZMinMeters || dz > domain.deltaZMaxMeters) {
+      return { status: 'fallback', reason: 'outside-supported-domain' };
+    }
+
+    const boundaries = r.boundariesMrad;
+    const guard = Number(r.guardMeters);
+    const first = lowMainEnvelope(payload, 0, distance);
+    if (!first || !finite(guard)) return { status: 'fallback', reason: 'invalid-payload' };
+    if (dz <= first.maxDeltaZM + guard) return { status: 'fallback', reason: 'below-minimum-selectable-command' };
+
+    let lastCrossed = null;
+    for (let i = 0; i < boundaries.length; i++) {
+      const envelope = lowMainEnvelope(payload, i, distance);
+      if (!envelope) return { status: 'fallback', reason: 'missing-boundary-envelope' };
+      const guardedMin = envelope.minDeltaZM - guard, guardedMax = envelope.maxDeltaZM + guard;
+      if (dz >= guardedMin && dz <= guardedMax) {
+        return { status: 'fallback', reason: 'family-boundary-envelope', boundaryMrad: boundaries[i] };
+      }
+      if (dz > guardedMax) { lastCrossed = boundaries[i]; continue; }
+      if (dz < guardedMin) break;
+    }
+    if (lastCrossed === null) return { status: 'fallback', reason: 'no-supported-command-bin' };
+
+    const commandMrad = Number(lastCrossed) + 5;
+    if (commandMrad < selectable[0] || commandMrad > selectable[1]) {
+      return { status: 'fallback', reason: 'outside-selectable-command-range' };
+    }
+    return { status: 'ok', commandMrad };
+  }
+
+  /* ---------- LOW ARC, tail/apex band (2439-2629 m) ---------- */
+
+  function lowExtensionEnvelope(region, boundary, distance, flatMil) {
+    for (const segment of boundary.segments || []) {
+      const value = interpolateSparseSegment(segment, distance);
+      if (value) return value;
+    }
+    const clip = Number(region.clipMeters);
+    if (!finite(clip) || !(clip > 0)) return null;
+    if (boundary.boundaryMrad < flatMil) return { minDeltaZM: -clip, maxDeltaZM: -clip };
+    if (boundary.boundaryMrad > flatMil) return { minDeltaZM: clip, maxDeltaZM: clip };
+    return null;
+  }
+
+  function chooseLowExtensionRegion(payload, distance) {
+    const tail = payload.regions?.tail, apex = payload.regions?.apex;
+    if (tail && distance >= Number(tail.distanceMinMeters) && distance <= Number(tail.distanceMaxMeters)) return tail;
+    if (apex && distance >= Number(apex.distanceMinMeters) && distance <= Number(apex.distanceMaxMeters)) return apex;
+    return null;
+  }
+
+  function resolveLowExtension(payload, distanceM, flatMil, deltaZM) {
+    const distance = Number(distanceM), flat = Number(flatMil), dz = Number(deltaZM);
+    if (![distance, flat, dz].every(Number.isFinite)) return { status: 'fallback', reason: 'non-finite-input' };
+
+    const domain = payload?.domain, selectable = payload?.selectableCommandMrad;
+    if (!domain || !Array.isArray(selectable) || selectable.length !== 2) {
+      return { status: 'fallback', reason: 'invalid-payload' };
+    }
+    if (distance < domain.distanceMinMeters || distance > domain.distanceMaxMeters ||
+        dz < domain.deltaZMinMeters || dz > domain.deltaZMaxMeters) {
+      return { status: 'fallback', reason: 'outside-supported-domain' };
+    }
+
+    const reachability = interpolateSeries(
+      payload.reachability.distanceNodes, payload.reachability.maxPositiveDeltaZMeters, distance
+    );
+    const reachGuard = Number(payload.reachability.guardMeters);
+    if (!finite(reachability) || !finite(reachGuard)) return { status: 'fallback', reason: 'missing-reachability' };
+    if (dz > reachability + reachGuard) {
+      return { status: 'unreachable', reason: 'terrain-adjusted-low-unreachable', reachabilityDeltaZM: reachability };
+    }
+    if (dz >= reachability - reachGuard) {
+      return { status: 'fallback', reason: 'reachability-boundary', reachabilityDeltaZM: reachability };
+    }
+
+    const region = chooseLowExtensionRegion(payload, distance);
+    if (!region) return { status: 'fallback', reason: 'outside-supported-domain' };
+
+    const guard = Number(region.guardMeters);
+    let lastCrossed = null;
+    for (const boundary of region.boundaries) {
+      const envelope = lowExtensionEnvelope(region, boundary, distance, flat);
+      if (!envelope) return { status: 'fallback', reason: 'missing-boundary-envelope' };
+      const guardedMin = envelope.minDeltaZM - guard, guardedMax = envelope.maxDeltaZM + guard;
+      if (dz >= guardedMin && dz <= guardedMax) {
+        return { status: 'fallback', reason: 'family-boundary-envelope', boundaryMrad: boundary.boundaryMrad };
+      }
+      if (dz > guardedMax) { lastCrossed = Number(boundary.boundaryMrad); continue; }
+      if (dz < guardedMin) break;
+    }
+    if (lastCrossed === null) return { status: 'fallback', reason: 'below-minimum-selectable-command' };
+
+    const commandMrad = lastCrossed + 5;
+    if (commandMrad < selectable[0] || commandMrad > selectable[1]) {
+      return { status: 'fallback', reason: 'outside-selectable-command-range' };
+    }
+    return { status: 'ok', commandMrad };
+  }
+
+  /* ---------- HIGH ARC (780-2536 m) ---------- */
+
+  function highEnvelope(payload, boundary, distance, flatMil) {
+    for (const segment of boundary.segments || []) {
+      const value = interpolateSparseSegment(segment, distance);
+      if (value) return value;
+    }
+    const clip = Number(payload.representation.clipMeters);
+    if (!finite(clip) || !(clip > 0)) return null;
+    if (boundary.boundaryMrad < flatMil) return { minDeltaZM: clip, maxDeltaZM: clip };
+    if (boundary.boundaryMrad > flatMil) return { minDeltaZM: -clip, maxDeltaZM: -clip };
+    return null;
+  }
+
+  function resolveHigh(payload, distanceM, flatMil, deltaZM) {
+    const distance = Number(distanceM), flat = Number(flatMil), dz = Number(deltaZM);
+    if (![distance, flat, dz].every(Number.isFinite)) return { status: 'fallback', reason: 'non-finite-input' };
+
+    const domain = payload?.domain, r = payload?.representation, selectable = payload?.selectableCommandMrad;
+    if (!domain || !r || !Array.isArray(selectable) || selectable.length !== 2) {
+      return { status: 'fallback', reason: 'invalid-payload' };
+    }
+    if (distance < domain.distanceMinMeters || distance > domain.distanceMaxMeters ||
+        dz < domain.deltaZMinMeters || dz > domain.deltaZMaxMeters) {
+      return { status: 'fallback', reason: 'outside-supported-domain' };
+    }
+
+    const guard = Number(r.guardMeters);
+    for (const boundary of r.boundaries) {
+      const envelope = highEnvelope(payload, boundary, distance, flat);
+      if (!envelope) return { status: 'fallback', reason: 'missing-boundary-envelope' };
+      const guardedMin = envelope.minDeltaZM - guard, guardedMax = envelope.maxDeltaZM + guard;
+      if (dz >= guardedMin && dz <= guardedMax) {
+        return { status: 'fallback', reason: 'family-boundary-envelope', boundaryMrad: boundary.boundaryMrad };
+      }
+      if (dz > guardedMax) {
+        const commandMrad = Number(boundary.boundaryMrad) - 5;
+        if (commandMrad < selectable[0] || commandMrad > selectable[1]) {
+          return { status: 'fallback', reason: 'outside-selectable-command-range' };
+        }
+        return { status: 'ok', commandMrad };
+      }
+    }
+    return { status: 'fallback', reason: 'above-maximum-selectable-command' };
+  }
+
+  /* ---------- public API ---------- */
+
+  let payloads = null;
+  let loadError = null;
+
+  async function load(repoBase) {
+    try {
+      const [lowMain, lowExtension, highV2] = await Promise.all([
+        fetchPayload(repoBase, PAYLOAD_URLS.lowMain, 'low-main'),
+        fetchPayload(repoBase, PAYLOAD_URLS.lowExtension, 'low-tail-apex'),
+        fetchPayload(repoBase, PAYLOAD_URLS.highV2, 'high-v2')
+      ]);
+      if (!validateLowMain(lowMain) || !validateLowExtension(lowExtension) || !validateHigh(highV2)) {
+        throw new Error('Terrain correction payload failed validation');
+      }
+      payloads = { lowMain, lowExtension, highV2 };
+    } catch (e) {
+      loadError = e;
+      console.warn('[terrain-correction] failed to load, corrections disabled:', e);
+    }
+    return Boolean(payloads);
+  }
+
+  function resolve(distance, deltaZ, flatLowMil, flatHighMil) {
+    if (!payloads) return { low: null, high: null };
+
+    let low = null;
+    if (finite(flatLowMil)) {
+      low = distance <= 2439
+        ? resolveLowMain(payloads.lowMain, distance, flatLowMil, deltaZ)
+        : resolveLowExtension(payloads.lowExtension, distance, flatLowMil, deltaZ);
+    }
+
+    let high = null;
+    if (finite(flatHighMil)) {
+      high = resolveHigh(payloads.highV2, distance, flatHighMil, deltaZ);
+    }
+
+    return { low, high };
+  }
+
+  return { load, resolve, get ready() { return Boolean(payloads); }, get error() { return loadError; } };
+})();
+
+/* ---------- SPH-2 flat firing table ---------- */
+const LOW = [[1181,20],[1232,30],[1283,40],[1334,50],[1384,60],[1433,70],[1482,80],[1529,90],[1576,100],[1622,110],[1666,120],[1709,130],[1751,140],[1792,150],[1832,160],[1870,170],[1907,180],[1944,190],[1979,200],[2014,210],[2046,220],[2079,230],[2110,240],[2139,250],[2168,260],[2196,270],[2223,280],[2249,290],[2273,300],[2296,310],[2319,320],[2341,330],[2362,340],[2383,350],[2403,360],[2422,370],[2439,380],[2456,390],[2471,400],[2485,410],[2499,420],[2513,430],[2526,440],[2538,450],[2550,460],[2561,470],[2570,480],[2579,490],[2586,500],[2593,510],[2599,520],[2605,530],[2610,540],[2615,550],[2620,560],[2623,570],[2626,580],[2628,590],[2629,600]];
+const HIGH_RAW = [[2629,610],[2629,620],[2628,630],[2626,640],[2624,650],[2621,660],[2617,670],[2613,680],[2609,690],[2604,700],[2599,710],[2592,720],[2584,730],[2576,740],[2567,750],[2557,760],[2546,770],[2536,780],[2524,790],[2513,800],[2501,810],[2488,820],[2474,830],[2460,840],[2444,850],[2429,860],[2412,870],[2395,880],[2378,890],[2360,900],[2342,910],[2323,920],[2303,930],[2282,940],[2261,950],[2239,960],[2217,970],[2194,980],[2171,990],[2147,1000],[2123,1010],[2098,1020],[2072,1030],[2046,1040],[2019,1050],[1991,1060],[1963,1070],[1934,1080],[1905,1090],[1875,1100],[1844,1110],[1813,1120],[1782,1130],[1750,1140],[1717,1150],[1684,1160],[1650,1170],[1616,1180],[1582,1190],[1547,1200],[1512,1210],[1475,1220],[1438,1230],[1401,1240],[1363,1250],[1324,1260],[1285,1270],[1245,1280],[1205,1290],[1165,1300],[1124,1310],[1083,1320],[1041,1330],[999,1340],[956,1350],[913,1360],[869,1370],[825,1380],[780,1390]];
+const HIGH = HIGH_RAW.slice().sort((a, b) => a[0] - b[0]);
+const MIL_MIN = LOW[0][0], MIL_MAX = LOW[LOW.length - 1][0], HIGH_MIN = HIGH[0][0];
+
+function interpolate(table, distance) {
+  if (distance < table[0][0] || distance > table[table.length - 1][0]) return null;
+  for (let i = 0; i < table.length - 1; i++) {
+    const [d0, m0] = table[i], [d1, m1] = table[i + 1];
+    if (distance >= d0 && distance <= d1) {
+      if (d1 === d0) return m0;
+      return m0 + (distance - d0) / (d1 - d0) * (m1 - m0);
+    }
+  }
+  return null;
+}
+
+/* ---------- live data source ---------- */
+const REPO_BASE = 'https://raw.githubusercontent.com/apollyon-sys/wardogs-calculator/main/';
+const TILE_SIZE = 256;
+const NATIVE_ZOOM = 4;
+const MAPS = [
+  { id: 'bakurani', label: 'Bakurani' },
+  { id: 'ozeti', label: 'Ozeti' }
+];
+
+let currentMapId = MAPS[0].id;
+let mapConfig = null;
+let terrainManifest = null;
+const chunkCache = new Map();
+
+async function fetchJSON(path) {
+  const res = await fetch(REPO_BASE + path, { cache: 'force-cache' });
+  if (!res.ok) throw new Error(`${res.status} loading ${path}`);
+  return res.json();
+}
+
+async function loadMapData(mapId) {
+  mapConfig = await fetchJSON(`maps/${mapId}.json`);
+  terrainManifest = null;
+  chunkCache.clear();
+  try {
+    terrainManifest = await fetchJSON(`data/terrain/${mapId}/manifest.json`);
+  } catch (e) {
+    console.warn('Terrain manifest failed to load, ΔZ unavailable', e);
+  }
+}
+
+/* ---------- terrain height lookup (ported from terrain-ballistics.js, MIT) ---------- */
+function clamp(v, lo, hi) { return Math.min(hi, Math.max(lo, v)); }
+
+function locateTerrainPoint(manifest, gameX, gameY) {
+  const cov = manifest.coverage;
+  const eps = 1e-7;
+  if (gameX < cov.gameXMin - eps || gameX > cov.gameXMax + eps ||
+      gameY < cov.gameYMin - eps || gameY > cov.gameYMax + eps) return null;
+
+  const quadX = manifest.globalQuadOffsetX + gameX * manifest.gameUnitsToLandscapeQuadsX;
+  const quadY = manifest.globalQuadOffsetY + gameY * manifest.gameUnitsToLandscapeQuadsY;
+  const cq = manifest.chunkQuads;
+
+  const chunkX = clamp(Math.floor(quadX / cq), manifest.chunkXMin, manifest.chunkXMax);
+  const chunkY = clamp(Math.floor(quadY / cq), manifest.chunkYMin, manifest.chunkYMax);
+  const localX = clamp(quadX - chunkX * cq, 0, cq);
+  const localY = clamp(quadY - chunkY * cq, 0, cq);
+
+  return { chunkX, chunkY, localX, localY, key: `${chunkX},${chunkY}` };
+}
+
+async function loadChunk(mapId, key) {
+  const cacheKey = key;
+  if (chunkCache.has(cacheKey)) return chunkCache.get(cacheKey);
+  const entry = terrainManifest.chunks[key];
+  if (!entry) throw new Error(`Terrain chunk ${key} missing from manifest`);
+  const res = await fetch(REPO_BASE + `data/terrain/${mapId}/${entry.file}`);
+  if (!res.ok) throw new Error(`${res.status} loading terrain chunk ${key}`);
+  const buffer = await res.arrayBuffer();
+  const chunk = { entry, view: new DataView(buffer) };
+  chunkCache.set(cacheKey, chunk);
+  return chunk;
+}
+
+function rawHeightAt(chunk, x, y) {
+  const side = terrainManifest.verticesPerSide;
+  return chunk.view.getUint16((y * side + x) * 2, true);
+}
+
+function decodeHeight(raw, entry) {
+  const localZ = entry.minLocalZ + (raw / 65535) * (entry.maxLocalZ - entry.minLocalZ);
+  return terrainManifest.worldZOffsetMeters + localZ * terrainManifest.worldZScaleMetersPerLocalUnit;
+}
+
+async function terrainHeightAt(mapId, gameX, gameY) {
+  if (!terrainManifest) return null;
+  const loc = locateTerrainPoint(terrainManifest, gameX, gameY);
+  if (!loc) return null;
+  const chunk = await loadChunk(mapId, loc.key);
+  const maxV = terrainManifest.verticesPerSide - 1;
+  const x0 = clamp(Math.floor(loc.localX), 0, maxV), y0 = clamp(Math.floor(loc.localY), 0, maxV);
+  const x1 = clamp(x0 + 1, 0, maxV), y1 = clamp(y0 + 1, 0, maxV);
+  const fx = loc.localX - x0, fy = loc.localY - y0;
+
+  const z00 = decodeHeight(rawHeightAt(chunk, x0, y0), chunk.entry);
+  const z10 = decodeHeight(rawHeightAt(chunk, x1, y0), chunk.entry);
+  const z01 = decodeHeight(rawHeightAt(chunk, x0, y1), chunk.entry);
+  const z11 = decodeHeight(rawHeightAt(chunk, x1, y1), chunk.entry);
+
+  const top = z00 + (z10 - z00) * fx;
+  const bottom = z01 + (z11 - z01) * fx;
+  return top + (bottom - top) * fy;
+}
+
+/* ---------- tile viewer ---------- */
+const viewport = document.getElementById('mapViewport');
+const canvasEl = document.getElementById('mapCanvas');
+const svg = document.getElementById('overlaySvg');
+const loadingEl = document.getElementById('mapLoading');
+
+let zoom = NATIVE_ZOOM;
+let panX = 0, panY = 0;
+const tileImgCache = new Map();
+
+function tilesPerSide(z) { return Math.pow(2, z); }
+function canvasPx(z) { return tilesPerSide(z) * TILE_SIZE; }
+
+function worldToPx(wx, wy, z) {
+  const tb = mapConfig.tileBounds;
+  const size = canvasPx(z);
+  return { x: (wx - tb.minX) / (tb.maxX - tb.minX) * size, y: (wy - tb.minY) / (tb.maxY - tb.minY) * size };
+}
+function pxToWorld(px, py, z) {
+  const tb = mapConfig.tileBounds;
+  const size = canvasPx(z);
+  return { x: tb.minX + (px / size) * (tb.maxX - tb.minX), y: tb.minY + (py / size) * (tb.maxY - tb.minY) };
+}
+
+function clampPan() {
+  if (!mapConfig) return;
+  const vw = viewport.clientWidth, vh = viewport.clientHeight;
+  const size = canvasPx(zoom);
+  const minPanX = Math.min(0, vw - size), minPanY = Math.min(0, vh - size);
+  panX = clamp(panX, minPanX, 0);
+  panY = clamp(panY, minPanY, 0);
+}
+
+function setTransform() {
+  const t = `translate(${panX}px, ${panY}px)`;
+  canvasEl.style.width = canvasPx(zoom) + 'px';
+  canvasEl.style.height = canvasPx(zoom) + 'px';
+  canvasEl.style.transform = t;
+  svg.style.width = canvasPx(zoom) + 'px';
+  svg.style.height = canvasPx(zoom) + 'px';
+  svg.style.transform = t;
+  svg.setAttribute('viewBox', `0 0 ${canvasPx(zoom)} ${canvasPx(zoom)}`);
+}
+
+function renderTiles() {
+  if (!mapConfig) return;
+  const vw = viewport.clientWidth, vh = viewport.clientHeight;
+  const n = tilesPerSide(zoom);
+  const firstTx = clamp(Math.floor(-panX / TILE_SIZE) - 1, 0, n - 1);
+  const lastTx = clamp(Math.ceil((-panX + vw) / TILE_SIZE) + 1, 0, n - 1);
+  const firstTy = clamp(Math.floor(-panY / TILE_SIZE) - 1, 0, n - 1);
+  const lastTy = clamp(Math.ceil((-panY + vh) / TILE_SIZE) + 1, 0, n - 1);
+
+  setTransform();
+
+  const wanted = new Set();
+  for (let tx = firstTx; tx <= lastTx; tx++) {
+    for (let ty = firstTy; ty <= lastTy; ty++) {
+      const key = `${currentMapId}_${zoom}_${tx}_${ty}`;
+      wanted.add(key);
+      if (tileImgCache.has(key)) continue;
+      const img = document.createElement('img');
+      img.style.left = (tx * TILE_SIZE) + 'px';
+      img.style.top = (ty * TILE_SIZE) + 'px';
+      img.src = `${REPO_BASE}${mapConfig.tiles.path}/zoom_${zoom}/${tx}_${ty}.${mapConfig.tiles.extension}`;
+      img.onerror = () => { img.style.display = 'none'; };
+      canvasEl.appendChild(img);
+      tileImgCache.set(key, img);
+    }
+  }
+  // Drop tiles from other zoom levels / maps to bound memory use.
+  for (const [key, img] of tileImgCache) {
+    if (!key.startsWith(`${currentMapId}_${zoom}_`)) { img.remove(); tileImgCache.delete(key); }
+  }
+  renderMarkers();
+}
+
+function withAnimation(fn) {
+  canvasEl.classList.add('animated');
+  svg.classList.add('animated');
+  fn();
+  window.setTimeout(() => { canvasEl.classList.remove('animated'); svg.classList.remove('animated'); }, 200);
+}
+
+/* ---------- markers ---------- */
+const markers = { gun: null, target: null }; // {wx, wy}
+let activeMode = 'gun';
+
+function renderMarkers() {
+  svg.innerHTML = '';
+  const ns = 'http://www.w3.org/2000/svg';
+
+  if (markers.gun && markers.target) {
+    const a = worldToPx(markers.gun.wx, markers.gun.wy, zoom);
+    const b = worldToPx(markers.target.wx, markers.target.wy, zoom);
+    const line = document.createElementNS(ns, 'line');
+    line.setAttribute('x1', a.x); line.setAttribute('y1', a.y);
+    line.setAttribute('x2', b.x); line.setAttribute('y2', b.y);
+    line.setAttribute('stroke', '#5fc7d6');
+    line.setAttribute('stroke-width', 2);
+    line.setAttribute('stroke-dasharray', '7 5');
+    line.setAttribute('opacity', '0.85');
+    svg.appendChild(line);
+  }
+
+  for (const [key, color, label] of [['gun', '#5fc7d6', 'SPH-2'], ['target', '#f2a25c', 'ZIEL']]) {
+    const m = markers[key];
+    if (!m) continue;
+    const p = worldToPx(m.wx, m.wy, zoom);
+
+    const halo = document.createElementNS(ns, 'circle');
+    halo.setAttribute('cx', p.x); halo.setAttribute('cy', p.y);
+    halo.setAttribute('r', 12);
+    halo.setAttribute('fill', color);
+    halo.setAttribute('opacity', '0.18');
+    svg.appendChild(halo);
+
+    const circle = document.createElementNS(ns, 'circle');
+    circle.setAttribute('cx', p.x); circle.setAttribute('cy', p.y);
+    circle.setAttribute('r', 7);
+    circle.setAttribute('fill', color);
+    circle.setAttribute('stroke', '#10131a');
+    circle.setAttribute('stroke-width', 2);
+    svg.appendChild(circle);
+
+    const text = document.createElementNS(ns, 'text');
+    text.setAttribute('x', p.x); text.setAttribute('y', p.y - 15);
+    text.setAttribute('fill', color);
+    text.setAttribute('font-size', '12');
+    text.setAttribute('font-family', 'Segoe UI, system-ui, sans-serif');
+    text.setAttribute('text-anchor', 'middle');
+    text.setAttribute('font-weight', '700');
+    text.textContent = label;
+    svg.appendChild(text);
+  }
+}
+
+/* ---------- correction status text ---------- */
+const REASON_TEXT = {
+  'outside-supported-domain': 'außerhalb des Korrekturbereichs',
+  'below-minimum-selectable-command': 'ΔZ zu gering für Korrektur',
+  'above-maximum-selectable-command': 'ΔZ zu groß für Korrektur',
+  'family-boundary-envelope': 'ΔZ liegt auf einer Bogengrenze',
+  'outside-selectable-command-range': 'korrigierter Wert außerhalb des Elevationsbereichs',
+  'reachability-boundary': 'nahe der Erreichbarkeitsgrenze',
+  'missing-reachability': 'Korrektur nicht verfügbar',
+  'missing-boundary-envelope': 'Korrektur nicht verfügbar',
+  'invalid-payload': 'Korrektur nicht verfügbar',
+  'non-finite-input': 'Korrektur nicht verfügbar'
+};
+
+function renderArc(mode, flatMil, correction) {
+  const milEl = document.getElementById(mode + 'Mil');
+  const subEl = document.getElementById(mode + 'Sub');
+
+  if (flatMil === null) {
+    milEl.innerHTML = '—';
+    subEl.textContent = '';
+    return;
+  }
+
+  const useCorrection = document.getElementById('correctionToggle').checked;
+
+  if (useCorrection && correction && correction.status === 'ok' && Number.isFinite(correction.commandMrad)) {
+    milEl.innerHTML = Math.round(correction.commandMrad) + ' mil<span class="pill good">korrigiert</span>';
+    const delta = correction.commandMrad - flatMil;
+    subEl.textContent = `Tabellenwert ${Math.round(flatMil)} mil · Δ ${delta >= 0 ? '+' : ''}${Math.round(delta)} mil für Geländeversatz`;
+    return;
+  }
+
+  if (useCorrection && correction && correction.status === 'unreachable') {
+    milEl.innerHTML = Math.round(flatMil) + ' mil<span class="pill bad">nicht erreichbar</span>';
+    subEl.textContent = 'Höhenunterschied übersteigt die Reichweite dieses Bogens auf dieser Distanz.';
+    return;
+  }
+
+  milEl.innerHTML = Math.round(flatMil) + ' mil<span class="pill muted">Tabellenwert</span>';
+  subEl.textContent = useCorrection
+    ? (REASON_TEXT[correction?.reason] || 'keine Korrekturdaten für diese Kombination')
+    : 'Geländekorrektur deaktiviert';
+}
+
+/* ---------- results ---------- */
+let resultsToken = 0;
+
+async function updateResults() {
+  const token = ++resultsToken;
+  const distEl = document.getElementById('distValue');
+  const statusEl = document.getElementById('rangeStatus');
+  const dzEl = document.getElementById('deltaZValue');
+
+  if (!markers.gun || !markers.target) {
+    distEl.textContent = '—';
+    renderArc('low', null, null);
+    renderArc('high', null, null);
+    statusEl.className = 'status-line muted';
+    statusEl.textContent = 'SPH-2- und Ziel-Marker setzen.';
+    dzEl.textContent = '—';
+    return;
+  }
+
+  const metersPerUnit = mapConfig.coordinateMetersPerUnit;
+  const dxMeters = (markers.target.wx - markers.gun.wx) * metersPerUnit;
+  const dyMeters = (markers.target.wy - markers.gun.wy) * metersPerUnit;
+  const distance = Math.hypot(dxMeters, dyMeters);
+  distEl.textContent = Math.round(distance) + ' m';
+
+  const flatLow = interpolate(LOW, distance);
+  const flatHigh = interpolate(HIGH, distance);
+
+  statusEl.className = 'status-line muted';
+  if (distance < HIGH_MIN) {
+    statusEl.className = 'status-line warn';
+    statusEl.textContent = `Unter Mindestreichweite (${HIGH_MIN} m).`;
+  } else if (distance > MIL_MAX) {
+    statusEl.className = 'status-line warn';
+    statusEl.textContent = `Über Maximalreichweite (${MIL_MAX} m).`;
+  } else if (distance < MIL_MIN) {
+    statusEl.textContent = `Nur High Arc verfügbar (Low Arc ab ${MIL_MIN} m).`;
+  } else {
+    statusEl.textContent = 'Low Arc bevorzugt (schneller, flacher).';
+  }
+
+  // Render flat values immediately, then upgrade once ΔZ + correction resolve.
+  renderArc('low', flatLow, null);
+  renderArc('high', flatHigh, null);
+  dzEl.textContent = 'lädt…';
+
+  try {
+    const [gunZ, targetZ] = await Promise.all([
+      terrainHeightAt(currentMapId, markers.gun.wx, markers.gun.wy),
+      terrainHeightAt(currentMapId, markers.target.wx, markers.target.wy)
+    ]);
+    if (token !== resultsToken) return; // a newer request superseded this one
+
+    if (gunZ === null || targetZ === null) {
+      dzEl.textContent = 'außerhalb der Karte';
+      renderArc('low', flatLow, null);
+      renderArc('high', flatHigh, null);
+      return;
+    }
+
+    const dz = targetZ - gunZ;
+    dzEl.textContent = (dz >= 0 ? '+' : '') + dz.toFixed(1) + ' m';
+
+    if (!TerrainCorrection.ready) {
+      renderArc('low', flatLow, { status: 'fallback', reason: 'invalid-payload' });
+      renderArc('high', flatHigh, { status: 'fallback', reason: 'invalid-payload' });
+      return;
+    }
+
+    const corr = TerrainCorrection.resolve(distance, dz, flatLow, flatHigh);
+    renderArc('low', flatLow, corr.low);
+    renderArc('high', flatHigh, corr.high);
+  } catch (e) {
+    if (token !== resultsToken) return;
+    dzEl.textContent = 'nicht verfügbar';
+    console.warn(e);
+  }
+}
+
+/* ---------- pointer-based pan / zoom ---------- */
+let dragging = false, dragPointerId = null, dragStart = null, dragged = false;
+
+viewport.addEventListener('pointerdown', e => {
+  if (e.button !== undefined && e.button !== 0) return;
+  dragging = true; dragged = false; dragPointerId = e.pointerId;
+  dragStart = { x: e.clientX, y: e.clientY, panX, panY };
+  viewport.setPointerCapture(e.pointerId);
+  viewport.classList.add('dragging');
+});
+viewport.addEventListener('pointermove', e => {
+  if (!dragging || e.pointerId !== dragPointerId) return;
+  const dx = e.clientX - dragStart.x, dy = e.clientY - dragStart.y;
+  if (Math.abs(dx) > 4 || Math.abs(dy) > 4) dragged = true;
+  panX = dragStart.panX + dx;
+  panY = dragStart.panY + dy;
+  clampPan();
+  renderTiles();
+});
+function endDrag(e) {
+  if (!dragging || e.pointerId !== dragPointerId) return;
+  dragging = false;
+  viewport.classList.remove('dragging');
+  try { viewport.releasePointerCapture(e.pointerId); } catch (err) { /* ignore */ }
+}
+viewport.addEventListener('pointerup', endDrag);
+viewport.addEventListener('pointercancel', endDrag);
+
+viewport.addEventListener('click', e => {
+  if (dragged) return;
+  const rect = viewport.getBoundingClientRect();
+  const px = e.clientX - rect.left - panX;
+  const py = e.clientY - rect.top - panY;
+  const world = pxToWorld(px, py, zoom);
+  markers[activeMode] = { wx: world.x, wy: world.y };
+  renderMarkers();
+  updateResults();
+});
+
+function zoomBy(delta, centerPx, centerPy) {
+  const vw = viewport.clientWidth, vh = viewport.clientHeight;
+  const cx = centerPx ?? vw / 2, cy = centerPy ?? vh / 2;
+  const worldBefore = pxToWorld(cx - panX, cy - panY, zoom);
+
+  const maxZ = mapConfig.tiles.maxZoom;
+  const minZ = mapConfig.tiles.minZoom;
+  const newZoom = clamp(zoom + delta, minZ, maxZ);
+  if (newZoom === zoom) return;
+  zoom = newZoom;
+
+  const after = worldToPx(worldBefore.x, worldBefore.y, zoom);
+  panX = cx - after.x;
+  panY = cy - after.y;
+  clampPan();
+  renderTiles();
+}
+
+document.getElementById('zoomIn').addEventListener('click', () => withAnimation(() => zoomBy(1)));
+document.getElementById('zoomOut').addEventListener('click', () => withAnimation(() => zoomBy(-1)));
+viewport.addEventListener('dblclick', e => {
+  const rect = viewport.getBoundingClientRect();
+  withAnimation(() => zoomBy(1, e.clientX - rect.left, e.clientY - rect.top));
+});
+viewport.addEventListener('wheel', e => {
+  e.preventDefault();
+  const rect = viewport.getBoundingClientRect();
+  zoomBy(e.deltaY < 0 ? 1 : -1, e.clientX - rect.left, e.clientY - rect.top);
+}, { passive: false });
+
+document.getElementById('recenterBtn').addEventListener('click', () => withAnimation(centerView));
+
+function centerView() {
+  const center = {
+    x: (mapConfig.bounds.minX + mapConfig.bounds.maxX) / 2,
+    y: (mapConfig.bounds.minY + mapConfig.bounds.maxY) / 2
+  };
+  zoom = NATIVE_ZOOM;
+  const vw = viewport.clientWidth, vh = viewport.clientHeight;
+  const p = worldToPx(center.x, center.y, zoom);
+  panX = vw / 2 - p.x;
+  panY = vh / 2 - p.y;
+  clampPan();
+  renderTiles();
+}
+
+window.addEventListener('resize', () => { clampPan(); renderTiles(); });
+
+/* ---------- mode + map controls ---------- */
+document.getElementById('modeGun').addEventListener('click', () => setMode('gun'));
+document.getElementById('modeTarget').addEventListener('click', () => setMode('target'));
+document.getElementById('clearBtn').addEventListener('click', () => {
+  markers.gun = null; markers.target = null;
+  renderMarkers(); updateResults();
+});
+document.getElementById('correctionToggle').addEventListener('change', updateResults);
+
+function setMode(mode) {
+  activeMode = mode;
+  document.getElementById('modeGun').classList.toggle('active', mode === 'gun');
+  document.getElementById('modeTarget').classList.toggle('active', mode === 'target');
+}
+
+const mapSelect = document.getElementById('mapSelect');
+MAPS.forEach(m => {
+  const opt = document.createElement('option');
+  opt.value = m.id; opt.textContent = m.label;
+  mapSelect.appendChild(opt);
+});
+mapSelect.addEventListener('change', () => switchMap(mapSelect.value));
+
+async function switchMap(mapId) {
+  currentMapId = mapId;
+  markers.gun = null; markers.target = null;
+  loadingEl.hidden = false;
+  try {
+    await loadMapData(mapId);
+    centerView();
+    updateResults();
+  } catch (err) {
+    console.error(err);
+    document.getElementById('rangeStatus').className = 'status-line warn';
+    document.getElementById('rangeStatus').textContent = 'Karte konnte nicht geladen werden (Internetverbindung prüfen).';
+  } finally {
+    loadingEl.hidden = true;
+  }
+}
+
+/* ---------- boot ---------- */
+async function boot() {
+  mapSelect.value = currentMapId;
+  loadingEl.hidden = false;
+  TerrainCorrection.load(REPO_BASE); // fire and forget; results wait on TerrainCorrection.ready lazily
+  try {
+    await loadMapData(currentMapId);
+    centerView();
+    updateResults();
+  } catch (err) {
+    console.error(err);
+    document.getElementById('rangeStatus').className = 'status-line warn';
+    document.getElementById('rangeStatus').textContent = 'Karte konnte nicht geladen werden (Internetverbindung prüfen).';
+  } finally {
+    loadingEl.hidden = true;
+  }
+}
+boot();
+</script>
+</body>
+</html>

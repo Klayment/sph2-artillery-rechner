@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SPH-2 Artillery-Rechner — Wardogs</title>
+<style>
+  :root {
+    --bg: #10131a;
+    --bg-panel: #1a2029;
+    --bg-panel-2: #212836;
+    --line: #2c3442;
+    --olive: #5fc7d6;
+    --olive-bright: #5fc7d6;
+    --amber: #f2a25c;
+    --red: #e0736b;
+    --text: #e7ebf2;
+    --text-dim: #8993a8;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background: radial-gradient(1200px 600px at 50% -10%, #1a2130 0%, var(--bg) 55%);
+    color: var(--text);
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    display: flex;
+    justify-content: center;
+    padding: 32px 16px;
+  }
+  .wrap { width: 100%; max-width: 640px; }
+  header { text-align: center; margin-bottom: 24px; }
+  header h1 {
+    margin: 0;
+    font-size: 1.5rem;
+    letter-spacing: 0.02em;
+    color: var(--text);
+    font-weight: 600;
+  }
+  header p { margin: 6px 0 0; color: var(--text-dim); font-size: 0.85rem; }
+  nav.pages { text-align: center; margin-bottom: 16px; font-size: 0.8rem; }
+  nav.pages a { color: var(--text-dim); text-decoration: none; padding: 6px 14px; border: 1px solid var(--line); border-radius: 20px; margin: 0 4px; display: inline-block; }
+  nav.pages a.active { color: var(--bg); background: var(--olive); border-color: var(--olive); font-weight: 600; }
+
+  .panel {
+    background: var(--bg-panel);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 16px;
+  }
+
+  .input-row { display: flex; gap: 10px; align-items: stretch; }
+  .input-row label { display: block; font-size: 0.75rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px; }
+  input[type="number"] {
+    width: 100%;
+    background: #0d0f0a;
+    border: 1px solid var(--line);
+    color: var(--olive-bright);
+    font-family: inherit;
+    font-size: 1.6rem;
+    padding: 10px 12px;
+    border-radius: 8px;
+    outline: none;
+  }
+  input[type="number"]:focus { border-color: var(--olive); }
+  .unit { align-self: flex-end; color: var(--text-dim); padding-bottom: 12px; font-size: 0.9rem; }
+
+  input[type="range"] {
+    width: 100%;
+    margin-top: 14px;
+    accent-color: var(--olive);
+  }
+  .range-labels { display: flex; justify-content: space-between; font-size: 0.7rem; color: var(--text-dim); margin-top: 2px; }
+
+  .results { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .result-card {
+    background: var(--bg-panel-2);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 16px;
+    text-align: center;
+    position: relative;
+  }
+  .result-card.disabled { opacity: 0.35; }
+  .result-card .arc-name { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-dim); }
+  .result-card .mil { font-size: 2rem; color: var(--olive-bright); font-weight: bold; margin: 6px 0 2px; }
+  .result-card .deg { font-size: 0.8rem; color: var(--text-dim); }
+  .result-card .badge {
+    display: inline-block;
+    margin-top: 8px;
+    font-size: 0.65rem;
+    padding: 2px 8px;
+    border-radius: 10px;
+    background: var(--olive);
+    color: #0d0f0a;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .result-card .note { font-size: 0.7rem; color: var(--text-dim); margin-top: 8px; }
+
+  .status {
+    margin-top: 16px;
+    padding: 10px 12px;
+    border-radius: 4px;
+    font-size: 0.82rem;
+    text-align: center;
+    display: none;
+  }
+  .status.show { display: block; }
+  .status.warn { background: rgba(217, 97, 79, 0.15); border: 1px solid var(--red); color: #f0a89b; }
+  .status.info { background: rgba(224, 168, 60, 0.12); border: 1px solid var(--amber); color: var(--amber); }
+
+  .meta { font-size: 0.72rem; color: var(--text-dim); line-height: 1.6; }
+  .meta b { color: var(--text); }
+
+  footer { text-align: center; color: var(--text-dim); font-size: 0.68rem; margin-top: 20px; line-height: 1.6; }
+  footer a { color: var(--olive); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>SPH-2 Artillery-Rechner</h1>
+    <p>Wardogs — Entfernung eingeben, Elevation ablesen</p>
+  </header>
+  <nav class="pages">
+    <a href="index.html" class="active">Manuelle Entfernung</a>
+    <a href="karte.html">Karten-Modus</a>
+  </nav>
+
+  <div class="panel">
+    <div class="input-row">
+      <div style="flex:1">
+        <label for="dist">Entfernung zum Ziel</label>
+        <input type="number" id="dist" value="1600" min="0" step="1">
+      </div>
+      <div class="unit">Meter</div>
+    </div>
+    <input type="range" id="distSlider" min="600" max="2750" value="1600" step="1">
+    <div class="range-labels"><span>600 m</span><span>2750 m</span></div>
+  </div>
+
+  <div class="panel">
+    <div class="results">
+      <div class="result-card" id="lowCard">
+        <div class="arc-name">Low Arc</div>
+        <div class="mil" id="lowMil">—</div>
+        <div class="deg" id="lowDeg">—</div>
+        <div id="lowBadge"></div>
+      </div>
+      <div class="result-card" id="highCard">
+        <div class="arc-name">High Arc</div>
+        <div class="mil" id="highMil">—</div>
+        <div class="deg" id="highDeg">—</div>
+        <div id="highBadge"></div>
+      </div>
+    </div>
+    <div class="status" id="status"></div>
+  </div>
+
+  <div class="panel meta">
+    <div><b>Mindestreichweite:</b> 780 m &nbsp; <b>Maximalreichweite:</b> 2629 m</div>
+    <div><b>Low Arc</b> ab 1181 m — schneller, flacherer Bogen, bevorzugt wenn verfügbar.</div>
+    <div><b>High Arc</b> von 780–2629 m — steilerer Einschlag, einzige Option unter 1181 m.</div>
+    <div style="margin-top:8px">Elevation in Mil (6400-Mil-Kreis), Grad zur Orientierung dazugerechnet. Werte gelten für ebenes Gelände — Höhenunterschiede zwischen Geschütz und Ziel sind nicht eingerechnet.</div>
+  </div>
+
+  <footer>
+    Feuerleittabellen community-gemessen, Quelle:
+    <a href="https://github.com/apollyon-sys/wardogs-calculator" target="_blank" rel="noopener">apollyon-sys/wardogs-calculator</a> (MIT) —
+    keine offiziellen Bulkhead-Daten.
+  </footer>
+</div>
+
+<script>
+// SPH-2 firing tables: [distance_meters, elevation_mil], sorted ascending by distance.
+// Source: apollyon-sys/wardogs-calculator (data/weapons.json, weapon id "spg"), MIT licensed.
+const LOW = [[1181,20],[1232,30],[1283,40],[1334,50],[1384,60],[1433,70],[1482,80],[1529,90],[1576,100],[1622,110],[1666,120],[1709,130],[1751,140],[1792,150],[1832,160],[1870,170],[1907,180],[1944,190],[1979,200],[2014,210],[2046,220],[2079,230],[2110,240],[2139,250],[2168,260],[2196,270],[2223,280],[2249,290],[2273,300],[2296,310],[2319,320],[2341,330],[2362,340],[2383,350],[2403,360],[2422,370],[2439,380],[2456,390],[2471,400],[2485,410],[2499,420],[2513,430],[2526,440],[2538,450],[2550,460],[2561,470],[2570,480],[2579,490],[2586,500],[2593,510],[2599,520],[2605,530],[2610,540],[2615,550],[2620,560],[2623,570],[2626,580],[2628,590],[2629,600]];
+const HIGH_RAW = [[2629,610],[2629,620],[2628,630],[2626,640],[2624,650],[2621,660],[2617,670],[2613,680],[2609,690],[2604,700],[2599,710],[2592,720],[2584,730],[2576,740],[2567,750],[2557,760],[2546,770],[2536,780],[2524,790],[2513,800],[2501,810],[2488,820],[2474,830],[2460,840],[2444,850],[2429,860],[2412,870],[2395,880],[2378,890],[2360,900],[2342,910],[2323,920],[2303,930],[2282,940],[2261,950],[2239,960],[2217,970],[2194,980],[2171,990],[2147,1000],[2123,1010],[2098,1020],[2072,1030],[2046,1040],[2019,1050],[1991,1060],[1963,1070],[1934,1080],[1905,1090],[1875,1100],[1844,1110],[1813,1120],[1782,1130],[1750,1140],[1717,1150],[1684,1160],[1650,1170],[1616,1180],[1582,1190],[1547,1200],[1512,1210],[1475,1220],[1438,1230],[1401,1240],[1363,1250],[1324,1260],[1285,1270],[1245,1280],[1205,1290],[1165,1300],[1124,1310],[1083,1320],[1041,1330],[999,1340],[956,1350],[913,1360],[869,1370],[825,1380],[780,1390],[735,1400]];
+
+// High arc is stored mil-ascending (distance-descending); resort by distance
+// ascending for interpolation, dropping the tied 2629m entry (keep lower mil).
+// The raw table runs one step past the SPH-2's official max elevation
+// (1390 mil / 780 m per weapons.json), so that trailing entry is clipped.
+const MAX_ELEVATION_MIL = 1390;
+const HIGH = HIGH_RAW
+  .filter(([, mil]) => mil <= MAX_ELEVATION_MIL)
+  .sort((a, b) => a[0] - b[0])
+  .filter((pair, i, arr) => i === 0 || pair[0] !== arr[i - 1][0]);
+
+const MIL_MIN = LOW[0][0];      // 1181 — low arc floor
+const MIL_MAX = LOW[LOW.length - 1][0]; // 2629 — shared max range
+const HIGH_MIN = HIGH[0][0];    // 780 — absolute min range
+
+function interpolate(table, distance) {
+  if (distance < table[0][0] || distance > table[table.length - 1][0]) return null;
+  for (let i = 0; i < table.length - 1; i++) {
+    const [d0, m0] = table[i], [d1, m1] = table[i + 1];
+    if (distance >= d0 && distance <= d1) {
+      if (d1 === d0) return m0;
+      const t = (distance - d0) / (d1 - d0);
+      return m0 + t * (m1 - m0);
+    }
+  }
+  return null;
+}
+
+const milToDeg = mil => (mil * 360 / 6400).toFixed(1);
+
+const distInput = document.getElementById('dist');
+const distSlider = document.getElementById('distSlider');
+const lowMil = document.getElementById('lowMil');
+const lowDeg = document.getElementById('lowDeg');
+const lowCard = document.getElementById('lowCard');
+const lowBadge = document.getElementById('lowBadge');
+const highMil = document.getElementById('highMil');
+const highDeg = document.getElementById('highDeg');
+const highCard = document.getElementById('highCard');
+const highBadge = document.getElementById('highBadge');
+const status = document.getElementById('status');
+
+function render() {
+  const distance = Number(distInput.value);
+  status.className = 'status';
+  status.textContent = '';
+
+  if (!Number.isFinite(distance) || distance <= 0) {
+    lowMil.textContent = '—'; lowDeg.textContent = '—';
+    highMil.textContent = '—'; highDeg.textContent = '—';
+    lowCard.classList.add('disabled'); highCard.classList.add('disabled');
+    lowBadge.innerHTML = ''; highBadge.innerHTML = '';
+    return;
+  }
+
+  const low = interpolate(LOW, distance);
+  const high = interpolate(HIGH, distance);
+
+  if (low !== null) {
+    lowMil.textContent = Math.round(low) + ' mil';
+    lowDeg.textContent = milToDeg(low) + '°';
+    lowCard.classList.remove('disabled');
+    lowBadge.innerHTML = '<span class="badge">bevorzugt</span>';
+  } else {
+    lowMil.textContent = '—'; lowDeg.textContent = distance < MIL_MIN ? 'zu nah' : 'außer Reichweite';
+    lowCard.classList.add('disabled'); lowBadge.innerHTML = '';
+  }
+
+  if (high !== null) {
+    highMil.textContent = Math.round(high) + ' mil';
+    highDeg.textContent = milToDeg(high) + '°';
+    highCard.classList.remove('disabled');
+    highBadge.innerHTML = low === null ? '<span class="badge">einzige Option</span>' : '';
+  } else {
+    highMil.textContent = '—'; highDeg.textContent = distance > MIL_MAX ? 'außer Reichweite' : 'zu nah';
+    highCard.classList.add('disabled'); highBadge.innerHTML = '';
+  }
+
+  if (distance < HIGH_MIN) {
+    status.classList.add('show', 'warn');
+    status.textContent = `Unter Mindestreichweite (${HIGH_MIN} m) — Ziel ist zu nah für die SPH-2.`;
+  } else if (distance > MIL_MAX) {
+    status.classList.add('show', 'warn');
+    status.textContent = `Über Maximalreichweite (${MIL_MAX} m) — Ziel liegt außerhalb der Reichweite.`;
+  } else if (distance < MIL_MIN) {
+    status.classList.add('show', 'info');
+    status.textContent = `Unter ${MIL_MIN} m deckt nur der High Arc ab — Low Arc beginnt erst bei ${MIL_MIN} m.`;
+  }
+}
+
+distInput.addEventListener('input', () => {
+  distSlider.value = distInput.value;
+  render();
+});
+distSlider.addEventListener('input', () => {
+  distInput.value = distSlider.value;
+  render();
+});
+
+render();
+</script>
+</body>
+</html>

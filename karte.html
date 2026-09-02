@@ -198,8 +198,16 @@
 
     <div class="side">
       <div class="card">
-        <div class="label">Distanz</div>
-        <div class="value" id="distValue">—</div>
+        <div style="display:flex; gap:20px;">
+          <div style="flex:1">
+            <div class="label">Distanz</div>
+            <div class="value" id="distValue">—</div>
+          </div>
+          <div style="flex:1">
+            <div class="label">Peilung</div>
+            <div class="value" id="azimuthValue">—</div>
+          </div>
+        </div>
       </div>
 
       <div class="card">
@@ -867,11 +875,13 @@ let resultsToken = 0;
 async function updateResults() {
   const token = ++resultsToken;
   const distEl = document.getElementById('distValue');
+  const azimuthEl = document.getElementById('azimuthValue');
   const statusEl = document.getElementById('rangeStatus');
   const dzEl = document.getElementById('deltaZValue');
 
   if (!markers.gun || !markers.target) {
     distEl.textContent = '—';
+    azimuthEl.textContent = '—';
     renderArc('low', null, null);
     renderArc('high', null, null);
     statusEl.className = 'status-line muted';
@@ -885,6 +895,10 @@ async function updateResults() {
   const dyMeters = (markers.target.wy - markers.gun.wy) * metersPerUnit;
   const distance = Math.hypot(dxMeters, dyMeters);
   distEl.textContent = Math.round(distance) + ' m';
+
+  // Compass bearing gun -> target: 0deg/360deg = north (up, -Y), 90deg = east (+X).
+  const bearing = (Math.atan2(dxMeters, -dyMeters) * 180 / Math.PI + 360) % 360;
+  azimuthEl.textContent = String(Math.round(bearing)).padStart(3, '0') + '°';
 
   const flatLow = interpolate(LOW, distance);
   const flatHigh = interpolate(HIGH, distance);
